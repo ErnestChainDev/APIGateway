@@ -39,6 +39,25 @@ class VerifyOut(BaseModel):
     sub: str
     email: str
 
+# Forgot Password Schemas
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+class ResetPasswordIn(BaseModel):
+    email: EmailStr
+    otp: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def bcrypt_max_bytes(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > MAX_BCRYPT_BYTES:
+            raise ValueError("Password too long (max 72 bytes for bcrypt).")
+        return v
+
+class GenericMsgOut(BaseModel):
+    detail: str
+
 # Profile Schemas
 class ProfileUpsertIn(BaseModel):
     full_name: str = Field(default="")
