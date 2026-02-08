@@ -21,10 +21,6 @@ from .schemas import (
 
 load_dotenv()
 
-# -------------------------
-# App + Logging
-# -------------------------
-
 app = FastAPI(title="API Gateway", version="1.0.0")
 
 logging.basicConfig(level=logging.INFO)
@@ -36,31 +32,32 @@ logger = logging.getLogger("api-gateway")
 # -------------------------
 
 def _get_env(name: str, default: Optional[str] = None) -> str:
-    """Get env var; if missing and no default, raise with a clear message."""
     val = os.getenv(name, default)
-    if val is None or val == "":
+    if val is None or val.strip() == "":
         raise RuntimeError(f"Missing required environment variable: {name}")
-    return val
+    return val.strip()
 
 
 def _parse_origins(raw: str) -> list[str]:
-    # allows "*" or comma-separated origins
-    raw = raw.strip()
+    raw = (raw or "").strip()
+    if not raw:
+        return ["*"]
     if raw == "*":
         return ["*"]
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
 SERVICES = {
-    "auth": _get_env("AUTH_SERVICE_URL"),
-    "profile": _get_env("PROFILE_SERVICE_URL"),
-    "course": _get_env("COURSE_SERVICE_URL"),
-    "quiz": _get_env("QUIZ_SERVICE_URL"),
-    "ai": _get_env("AI_SERVICE_URL"),
-    "chat": _get_env("CHAT_SERVICE_URL"),
-    "feedback": _get_env("FEEDBACK_SERVICE_URL"),
+    "auth": _get_env("AUTH_SERVICE_URL").rstrip("/"),
+    "profile": _get_env("PROFILE_SERVICE_URL").rstrip("/"),
+    "course": _get_env("COURSE_SERVICE_URL").rstrip("/"),
+    "quiz": _get_env("QUIZ_SERVICE_URL").rstrip("/"),
+    "ai": _get_env("AI_SERVICE_URL").rstrip("/"),
+    "chat": _get_env("CHAT_SERVICE_URL").rstrip("/"),
+    "feedback": _get_env("FEEDBACK_SERVICE_URL").rstrip("/"),
 }
 
+# IMPORTANT: DO NOT include "/" here, it makes everything public.
 PUBLIC_PREFIXES = (
     "/auth/register",
     "/auth/login",
@@ -70,35 +67,67 @@ PUBLIC_PREFIXES = (
     "/auth/google/login",
     "/auth/google/callback",
     "/health",
-    "/",
 )
 
-# CORS
+# Root exact path should be public:
+PUBLIC_EXACT = ("/",)
+
 origins = _parse_origins(os.getenv("CORS_ORIGINS", "*"))
+allow_credentials = True
+if origins == ["*"]:
+    # Browsers reject "*" with credentials
+    allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 def _is_public(path: str) -> bool:
+    if path in PUBLIC_EXACT:
+        return True
     return any(path.startswith(p) for p in PUBLIC_PREFIXES)
 
 
+# ✅ DO NOT FORWARD hop-by-hop headers (esp. content-length)
+HOP_BY_HOP_HEADERS = {
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "upgrade",
+}
+
+
 def _copy_headers(request: Request) -> dict[str, str]:
-    headers = dict(request.headers)
-    headers.pop("host", None)
-    return headers
+    out: dict[str, str] = {}
+    for k, v in request.headers.items():
+        if k.lower() in HOP_BY_HOP_HEADERS:
+            continue
+        out[k] = v
+    return out
 
 
 def _attach_user_headers(headers: dict[str, str], request: Request) -> None:
     user = getattr(request.state, "user", None)
-    if user:
-        headers["X-User-ID"] = str(user.get("sub", ""))
-        headers["X-User-Email"] = str(user.get("email", ""))
+    if not isinstance(user, dict):
+        return
+
+    uid = str(user.get("sub") or "").strip()
+    email = str(user.get("email") or "").strip()
+
+    if uid:
+        headers["X-User-ID"] = uid
+    if email:
+        headers["X-User-Email"] = email
 
 
 def _build_target_url(service_name: str, path: str) -> str:
@@ -106,6 +135,11 @@ def _build_target_url(service_name: str, path: str) -> str:
     if not base:
         raise HTTPException(status_code=404, detail=f"Service '{service_name}' not found")
     return f"{base}{path}"
+
+
+def _is_json_request(request: Request) -> bool:
+    ct = (request.headers.get("content-type") or "").lower()
+    return "application/json" in ct
 
 
 async def forward(
@@ -117,26 +151,32 @@ async def forward(
     json_body: Optional[dict[str, Any]] = None,
     timeout: float = 30.0,
 ) -> Response:
-    """
-    Forward request to microservice.
-    Handles:
-    - redirects (Google OAuth)
-    - JSON responses
-    - non-JSON responses (returns text wrapped in JSON)
-    """
     target_url = _build_target_url(service, path)
     headers = _copy_headers(request)
     _attach_user_headers(headers, request)
 
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-            resp = await client.request(
-                method=method,
-                url=target_url,
-                headers=headers,
-                params=request.query_params,
-                json=json_body,
-            )
+            kwargs: dict[str, Any] = {
+                "method": method,
+                "url": target_url,
+                "headers": headers,
+                "params": request.query_params,
+            }
+
+            # If route provided json_body explicitly, use it
+            if json_body is not None:
+                kwargs["json"] = json_body
+            else:
+                # Otherwise, forward raw body for POST/PUT/PATCH
+                if method.upper() in ("POST", "PUT", "PATCH"):
+                    body = await request.body()
+                    if body:
+                        # Keep original content-type and forward raw bytes
+                        kwargs["content"] = body
+
+            resp = await client.request(**kwargs)
+
     except httpx.TimeoutException:
         logger.error("Timeout calling %s: %s", service, target_url)
         raise HTTPException(status_code=504, detail=f"Service '{service}' timeout")
@@ -144,42 +184,77 @@ async def forward(
         logger.error("Error calling %s: %s (%s)", service, target_url, e)
         raise HTTPException(status_code=503, detail=f"Service '{service}' unavailable")
 
-    # Redirect support (important for Google OAuth endpoints)
+    # Redirect passthrough for OAuth flows
     if resp.status_code in (301, 302, 303, 307, 308):
         location = resp.headers.get("location")
-        if location:
-            return RedirectResponse(url=location, status_code=resp.status_code)
-        return JSONResponse(status_code=resp.status_code, content={"detail": "Redirect without location"})
+        if not location:
+            return JSONResponse(status_code=resp.status_code, content={"detail": "Redirect without location"})
 
-    # JSON vs non-JSON
-    content_type = resp.headers.get("content-type", "")
-    if "application/json" in content_type:
+        out = RedirectResponse(url=location, status_code=resp.status_code)
+
+        # forward set-cookie headers if any
+        for sc in resp.headers.get_list("set-cookie"):
+            out.headers.append("set-cookie", sc)
+
+        return out
+
+    content_type = resp.headers.get("content-type", "") or ""
+    if "application/json" in content_type.lower():
         data = resp.json() if resp.text else None
         return JSONResponse(status_code=resp.status_code, content=data)
 
-    # fallback: return text wrapped in JSON
-    return JSONResponse(
+    # For non-json, forward as text (simple)
+    return Response(
+        content=resp.content,
         status_code=resp.status_code,
-        content={"detail": resp.text} if resp.text else None,
+        media_type=content_type.split(";")[0] if content_type else None,
     )
 
 
 async def _verify_token(token: str) -> dict[str, Any]:
     """
-    Calls auth service /auth/verify.
-    Returns decoded payload (sub, email, ...).
+    Verify token via auth-service and normalize returned payload.
+    REQUIRED: sub, email
     """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.post(f"{SERVICES['auth']}/auth/verify", json={"token": token})
+            r = await client.post(
+                f"{SERVICES['auth']}/auth/verify",
+                json={"token": token},
+            )
     except httpx.RequestError as e:
         logger.error("Auth service error: %s", e)
         raise HTTPException(status_code=503, detail="Authentication service unavailable")
 
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    try:
+        data: Any = r.json()
+    except Exception:
+        data = r.text
 
-    return r.json()
+    if r.status_code != 200:
+        detail = "Invalid or expired token"
+        if isinstance(data, dict):
+            detail = data.get("detail") or data.get("message") or detail
+        elif isinstance(data, str) and data.strip():
+            detail = data
+        raise HTTPException(status_code=401, detail=detail)
+
+    payload = data
+    if isinstance(payload, dict) and "user" in payload and isinstance(payload["user"], dict):
+        payload = payload["user"]
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    sub = payload.get("sub")
+    email = payload.get("email")
+
+    if not sub:
+        raise HTTPException(status_code=401, detail="Token missing sub")
+    if not email:
+        raise HTTPException(status_code=401, detail="Token missing email")
+
+    return {"sub": str(sub), "email": str(email)}
 
 
 # -------------------------
@@ -206,7 +281,8 @@ async def auth_middleware(request: Request, call_next):
         )
 
     try:
-        request.state.user = await _verify_token(token)
+        user = await _verify_token(token)
+        request.state.user = user
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
@@ -251,21 +327,20 @@ async def auth_verify(payload: VerifyIn, request: Request):
 
 @app.post("/auth/forgot-password", operation_id="auth_forgot_password", tags=["Authentication"])
 async def auth_forgot_password(payload: ForgotPasswordIn, request: Request):
-    # reset link (not OTP)
     return await forward(service="auth", path="/auth/forgot-password", method="POST", request=request, json_body=payload.model_dump())
 
 @app.post("/auth/reset-password", operation_id="auth_reset_password", tags=["Authentication"])
 async def auth_reset_password(payload: ResetPasswordIn, request: Request):
-    # reset link token (not OTP)
     return await forward(service="auth", path="/auth/reset-password", method="POST", request=request, json_body=payload.model_dump())
 
 @app.get("/auth/google/login", operation_id="auth_google_login", tags=["Authentication"])
-async def auth_google_login(request: Request):
+async def auth_google_login(request: Request, return_to: str | None = None):
+    # return_to is forwarded via query_params automatically
     return await forward(service="auth", path="/auth/google/login", method="GET", request=request)
 
 @app.get("/auth/google/callback", operation_id="auth_google_callback", tags=["Authentication"])
-async def auth_google_callback(request: Request, code: str):
-    # code is forwarded via query params automatically
+async def auth_google_callback(request: Request, code: str, state: str | None = None):
+    # code/state are forwarded via query_params automatically
     return await forward(service="auth", path="/auth/google/callback", method="GET", request=request)
 
 
@@ -281,10 +356,6 @@ async def profile_get_me(request: Request):
 async def profile_update_me(payload: ProfileUpsertIn, request: Request):
     return await forward(service="profile", path="/profile/me", method="PUT", request=request, json_body=payload.model_dump())
 
-@app.get("/profile/by-user/{user_id}", operation_id="profile_get_by_user", tags=["Profile"])
-async def profile_get_by_user(user_id: int, request: Request):
-    return await forward(service="profile", path=f"/profile/by-user/{user_id}", method="GET", request=request)
-
 
 # -------------------------
 # Course Routes
@@ -292,7 +363,8 @@ async def profile_get_by_user(user_id: int, request: Request):
 
 @app.get("/courses/", operation_id="courses_list", tags=["Courses"])
 async def courses_list(request: Request, program: str | None = None):
-    # program is passed through query params automatically
+    # program will be forwarded via request.query_params if frontend passes it,
+    # but if you want to enforce it from this signature:
     return await forward(service="course", path="/courses/", method="GET", request=request)
 
 @app.get("/courses/{course_id}", operation_id="courses_get_one", tags=["Courses"])
