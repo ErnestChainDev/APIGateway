@@ -263,17 +263,21 @@ async def _verify_token(token: str) -> dict[str, Any]:
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    # ✅ Let CORS preflight pass through (no auth here)
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     if _is_public(request.url.path):
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+    if not auth_header.lower().startswith("bearer "):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Missing or invalid authorization header"},
         )
 
-    token = auth_header.removeprefix("Bearer ").strip()
+    token = auth_header.split(" ", 1)[1].strip()
     if not token:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
