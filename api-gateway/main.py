@@ -86,6 +86,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def _is_public(path: str) -> bool:
     if path in PUBLIC_EXACT:
         return True
@@ -130,6 +131,55 @@ def _attach_user_headers(headers: dict[str, str], request: Request) -> None:
         headers["X-User-Email"] = email
 
 
+# -------------------------
+# ✅ Program header support for Quiz (from Profile Service)
+# -------------------------
+
+PROGRAM_MAP = {
+    "comsci": "comsci",
+    "it": "it",
+    "is": "is",
+    "btvted": "btvted",
+}
+
+
+def _normalize_program(val: Any) -> str | None:
+    if not val:
+        return None
+    # ProfileUpsertIn accepts ComSci/IT/IS/BTVTED; normalize to lowercase keys
+    s = str(val).strip().lower()
+    return PROGRAM_MAP.get(s)
+
+
+async def _fetch_program_from_profile(request: Request) -> str | None:
+    """
+    Calls profile-service /profile/me and returns normalized preferred_program (or None).
+    Uses the same Authorization header from the incoming request.
+    """
+    auth = request.headers.get("authorization")
+    if not auth:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{SERVICES['profile']}/profile/me",
+                headers={"Authorization": auth},
+            )
+    except httpx.RequestError:
+        return None
+
+    if r.status_code != 200:
+        return None
+
+    try:
+        data = r.json()
+    except Exception:
+        return None
+
+    return _normalize_program(data.get("preferred_program"))
+
+
 def _build_target_url(service_name: str, path: str) -> str:
     base = SERVICES.get(service_name)
     if not base:
@@ -154,6 +204,12 @@ async def forward(
     target_url = _build_target_url(service, path)
     headers = _copy_headers(request)
     _attach_user_headers(headers, request)
+
+    # ✅ Attach user's program for Quiz service using Profile service
+    if service == "quiz":
+        prog = await _fetch_program_from_profile(request)
+        if prog:
+            headers["X-Program"] = prog
 
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
@@ -407,6 +463,15 @@ async def quiz_get_options(question_id: int, request: Request):
 @app.post("/quiz/attempts/start", operation_id="quiz_start_attempt", tags=["Quiz"])
 async def quiz_start_attempt(request: Request):
     return await forward(service="quiz", path="/quiz/attempts/start", method="POST", request=request)
+
+@app.get("/quiz/attempts/{attempt_id}/questions", operation_id="quiz_attempt_questions", tags=["Quiz"])
+async def quiz_attempt_questions(attempt_id: int, request: Request):
+    return await forward(
+        service="quiz",
+        path=f"/quiz/attempts/{attempt_id}/questions",
+        method="GET",
+        request=request,
+    )
 
 @app.post("/quiz/attempts/{attempt_id}/submit", operation_id="quiz_submit_attempt", tags=["Quiz"])
 async def quiz_submit_attempt(attempt_id: int, payload: SubmitQuizIn, request: Request):
