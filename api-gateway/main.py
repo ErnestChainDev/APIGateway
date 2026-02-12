@@ -146,7 +146,7 @@ PROGRAM_MAP = {
 def _normalize_program(val: Any) -> str | None:
     if not val:
         return None
-    # ProfileUpsertIn accepts ComSci/IT/IS/BTVTED; normalize to lowercase keys
+    # ProfileUpsertIn accepts BSCS/BSIT/BSIS/BTVTED; normalize to lowercase keys
     s = str(val).strip().lower()
     return PROGRAM_MAP.get(s)
 
