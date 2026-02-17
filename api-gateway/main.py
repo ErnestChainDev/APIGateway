@@ -136,10 +136,15 @@ def _attach_user_headers(headers: dict[str, str], request: Request) -> None:
 # -------------------------
 
 PROGRAM_MAP = {
-    "comsci": "comsci",
-    "it": "it",
-    "is": "is",
+    "bscs": "bscs",
+    "bsit": "bsit",
+    "bsis": "bsis",
     "btvted": "btvted",
+
+    # optional aliases (if profile stores short forms)
+    "comsci": "bscs",
+    "it": "bsit",
+    "is": "bsis",
 }
 
 
