@@ -136,10 +136,15 @@ def _attach_user_headers(headers: dict[str, str], request: Request) -> None:
 # -------------------------
 
 PROGRAM_MAP = {
-    "comsci": "comsci",
-    "it": "it",
-    "is": "is",
+    "bscs": "bscs",
+    "bsit": "bsit",
+    "bsis": "bsis",
     "btvted": "btvted",
+
+    # optional aliases (if profile stores short forms)
+    "comsci": "bscs",
+    "it": "bsit",
+    "is": "bsis",
 }
 
 
@@ -519,6 +524,62 @@ async def chat_send_message(payload: ChatIn, request: Request):
 @app.get("/chat/recent", operation_id="chat_get_recent", tags=["Chat"])
 async def chat_get_recent(request: Request):
     return await forward(service="chat", path="/chat/recent", method="GET", request=request)
+
+@app.delete("/chat/recent", operation_id="chat_delete_recent", tags=["Chat"])
+async def chat_delete_recent(request: Request):
+    return await forward(
+        service="chat",
+        path="/chat/recent",
+        method="DELETE",
+        request=request,
+    )
+
+@app.post("/chat/conversations", operation_id="chat_create_conversation", tags=["Chat"])
+async def chat_create_conversation(request: Request):
+    return await forward(
+        service="chat",
+        path="/chat/conversations",
+        method="POST",
+        request=request,
+    )
+
+@app.get("/chat/conversations", operation_id="chat_list_conversations", tags=["Chat"])
+async def chat_list_conversations(request: Request):
+    return await forward(
+        service="chat",
+        path="/chat/conversations",
+        method="GET",
+        request=request,
+    )
+
+@app.get("/chat/conversations/{conversation_id}/messages", operation_id="chat_get_conversation_messages", tags=["Chat"])
+async def chat_get_conversation_messages(conversation_id: int, request: Request):
+    return await forward(
+        service="chat",
+        path=f"/chat/conversations/{conversation_id}/messages",
+        method="GET",
+        request=request,
+    )
+
+@app.post("/chat/conversations/{conversation_id}", operation_id="chat_send_message_in_conversation", tags=["Chat"])
+async def chat_send_message_in_conversation(conversation_id: int, payload: ChatIn, request: Request):
+    return await forward(
+        service="chat",
+        path=f"/chat/conversations/{conversation_id}",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+        timeout=60.0,
+    )
+
+@app.delete("/chat/conversations/{conversation_id}", operation_id="chat_delete_conversation", tags=["Chat"])
+async def chat_delete_conversation(conversation_id: int, request: Request):
+    return await forward(
+        service="chat",
+        path=f"/chat/conversations/{conversation_id}",
+        method="DELETE",
+        request=request,
+    )
 
 
 # -------------------------
