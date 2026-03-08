@@ -414,6 +414,16 @@ async def courses_latest_progress(request: Request):
     )
 
 
+@app.get("/courses/progress/history", operation_id="courses_progress_history", tags=["Courses"])
+async def courses_progress_history(request: Request):
+    return await forward(
+        service="course",
+        path="/courses/progress/history",
+        method="GET",
+        request=request,
+    )
+
+
 # Quiz Routes
 @app.post("/quiz/questions", operation_id="quiz_create_question", tags=["Quiz"])
 async def quiz_create_question(payload: QuestionCreateIn, request: Request):
