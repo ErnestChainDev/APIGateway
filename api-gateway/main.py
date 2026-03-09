@@ -15,7 +15,7 @@ from .schemas import (
     ForgotPasswordIn, ResetPasswordIn,
     ProfileUpsertIn, CourseIn,
     QuestionCreateIn, OptionCreateIn, SubmitQuizIn,
-    RecommendIn, ChatIn, FeedbackIn,CourseIn, CourseProgressIn,
+    RecommendIn, ChatIn, FeedbackIn, CourseProgressIn,
 )
 
 load_dotenv()
@@ -535,15 +535,27 @@ async def chat_delete_conversation(conversation_id: int, request: Request):
     return await forward(service="chat", path=f"/chat/conversations/{conversation_id}", method="DELETE", request=request)
 
 
+
 # Feedback Routes
 @app.post("/feedback/", operation_id="feedback_submit", tags=["Feedback"])
 async def feedback_submit(payload: FeedbackIn, request: Request):
-    return await forward(service="feedback", path="/feedback/", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="feedback",
+        path="/feedback/",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.get("/feedback/stats", operation_id="feedback_get_stats", tags=["Feedback"])
 async def feedback_get_stats(request: Request):
-    return await forward(service="feedback", path="/feedback/stats", method="GET", request=request)
+    return await forward(
+        service="feedback",
+        path="/feedback/stats",
+        method="GET",
+        request=request,
+    )
 
 
 if __name__ == "__main__":
