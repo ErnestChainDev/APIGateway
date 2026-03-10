@@ -14,7 +14,7 @@ from .schemas import (
     RegisterIn, LoginIn, VerifyIn,
     ForgotPasswordIn, ResetPasswordIn,
     ProfileUpsertIn, CourseIn,
-    QuestionCreateIn, OptionCreateIn, SubmitQuizIn,
+    QuestionCreateIn, OptionCreateIn, SubmitQuizIn, SaveAnswerIn,
     RecommendIn, ChatIn, FeedbackIn, CourseProgressIn,
 )
 
@@ -329,27 +329,57 @@ async def root():
 # Auth Routes
 @app.post("/auth/register", operation_id="auth_register", tags=["Authentication"])
 async def auth_register(payload: RegisterIn, request: Request):
-    return await forward(service="auth", path="/auth/register", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="auth",
+        path="/auth/register",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.post("/auth/login", operation_id="auth_login", tags=["Authentication"])
 async def auth_login(payload: LoginIn, request: Request):
-    return await forward(service="auth", path="/auth/login", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="auth",
+        path="/auth/login",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.post("/auth/verify", operation_id="auth_verify", tags=["Authentication"])
 async def auth_verify(payload: VerifyIn, request: Request):
-    return await forward(service="auth", path="/auth/verify", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="auth",
+        path="/auth/verify",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.post("/auth/forgot-password", operation_id="auth_forgot_password", tags=["Authentication"])
 async def auth_forgot_password(payload: ForgotPasswordIn, request: Request):
-    return await forward(service="auth", path="/auth/forgot-password", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="auth",
+        path="/auth/forgot-password",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.post("/auth/reset-password", operation_id="auth_reset_password", tags=["Authentication"])
 async def auth_reset_password(payload: ResetPasswordIn, request: Request):
-    return await forward(service="auth", path="/auth/reset-password", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="auth",
+        path="/auth/reset-password",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.get("/auth/google/login", operation_id="auth_google_login", tags=["Authentication"])
@@ -370,7 +400,13 @@ async def profile_get_me(request: Request):
 
 @app.put("/profile/me", operation_id="profile_update_me", tags=["Profile"])
 async def profile_update_me(payload: ProfileUpsertIn, request: Request):
-    return await forward(service="profile", path="/profile/me", method="PUT", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="profile",
+        path="/profile/me",
+        method="PUT",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 # Course Routes
@@ -386,12 +422,19 @@ async def courses_get_one(course_id: int, request: Request):
 
 @app.post("/courses/", operation_id="courses_create", tags=["Courses"])
 async def courses_create(payload: CourseIn, request: Request):
-    return await forward(service="course", path="/courses/", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="course",
+        path="/courses/",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.delete("/courses/{course_id}", operation_id="courses_delete", tags=["Courses"])
 async def courses_delete(course_id: int, request: Request):
     return await forward(service="course", path=f"/courses/{course_id}", method="DELETE", request=request)
+
 
 @app.post("/courses/progress", operation_id="courses_save_progress", tags=["Courses"])
 async def courses_save_progress(payload: CourseProgressIn, request: Request):
@@ -427,12 +470,24 @@ async def courses_progress_history(request: Request):
 # Quiz Routes
 @app.post("/quiz/questions", operation_id="quiz_create_question", tags=["Quiz"])
 async def quiz_create_question(payload: QuestionCreateIn, request: Request):
-    return await forward(service="quiz", path="/quiz/questions", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="quiz",
+        path="/quiz/questions",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.post("/quiz/questions/{question_id}/options", operation_id="quiz_create_option", tags=["Quiz"])
 async def quiz_create_option(question_id: int, payload: OptionCreateIn, request: Request):
-    return await forward(service="quiz", path=f"/quiz/questions/{question_id}/options", method="POST", request=request, json_body=payload.model_dump())
+    return await forward(
+        service="quiz",
+        path=f"/quiz/questions/{question_id}/options",
+        method="POST",
+        request=request,
+        json_body=payload.model_dump(),
+    )
 
 
 @app.get("/quiz/questions", operation_id="quiz_list_questions", tags=["Quiz"])
@@ -442,7 +497,12 @@ async def quiz_list_questions(request: Request):
 
 @app.get("/quiz/questions/{question_id}/options", operation_id="quiz_get_options", tags=["Quiz"])
 async def quiz_get_options(question_id: int, request: Request):
-    return await forward(service="quiz", path=f"/quiz/questions/{question_id}/options", method="GET", request=request)
+    return await forward(
+        service="quiz",
+        path=f"/quiz/questions/{question_id}/options",
+        method="GET",
+        request=request,
+    )
 
 
 @app.post("/quiz/attempts/start", operation_id="quiz_start_attempt", tags=["Quiz"])
@@ -452,7 +512,43 @@ async def quiz_start_attempt(request: Request):
 
 @app.get("/quiz/attempts/{attempt_id}/questions", operation_id="quiz_attempt_questions", tags=["Quiz"])
 async def quiz_attempt_questions(attempt_id: int, request: Request):
-    return await forward(service="quiz", path=f"/quiz/attempts/{attempt_id}/questions", method="GET", request=request)
+    return await forward(
+        service="quiz",
+        path=f"/quiz/attempts/{attempt_id}/questions",
+        method="GET",
+        request=request,
+    )
+
+
+@app.get("/quiz/attempts/{attempt_id}/progress", operation_id="quiz_attempt_progress", tags=["Quiz"])
+async def quiz_attempt_progress(attempt_id: int, request: Request):
+    return await forward(
+        service="quiz",
+        path=f"/quiz/attempts/{attempt_id}/progress",
+        method="GET",
+        request=request,
+    )
+
+
+@app.put("/quiz/attempts/{attempt_id}/answers", operation_id="quiz_save_answer", tags=["Quiz"])
+async def quiz_save_answer(attempt_id: int, payload: SaveAnswerIn, request: Request):
+    return await forward(
+        service="quiz",
+        path=f"/quiz/attempts/{attempt_id}/answers",
+        method="PUT",
+        request=request,
+        json_body=payload.model_dump(),
+    )
+
+
+@app.post("/quiz/attempts/{attempt_id}/cancel", operation_id="quiz_cancel_attempt", tags=["Quiz"])
+async def quiz_cancel_attempt(attempt_id: int, request: Request):
+    return await forward(
+        service="quiz",
+        path=f"/quiz/attempts/{attempt_id}/cancel",
+        method="POST",
+        request=request,
+    )
 
 
 @app.post("/quiz/attempts/{attempt_id}/submit", operation_id="quiz_submit_attempt", tags=["Quiz"])
@@ -515,7 +611,12 @@ async def chat_list_conversations(request: Request):
 
 @app.get("/chat/conversations/{conversation_id}/messages", operation_id="chat_get_conversation_messages", tags=["Chat"])
 async def chat_get_conversation_messages(conversation_id: int, request: Request):
-    return await forward(service="chat", path=f"/chat/conversations/{conversation_id}/messages", method="GET", request=request)
+    return await forward(
+        service="chat",
+        path=f"/chat/conversations/{conversation_id}/messages",
+        method="GET",
+        request=request,
+    )
 
 
 @app.post("/chat/conversations/{conversation_id}", operation_id="chat_send_message_in_conversation", tags=["Chat"])
@@ -532,8 +633,12 @@ async def chat_send_message_in_conversation(conversation_id: int, payload: ChatI
 
 @app.delete("/chat/conversations/{conversation_id}", operation_id="chat_delete_conversation", tags=["Chat"])
 async def chat_delete_conversation(conversation_id: int, request: Request):
-    return await forward(service="chat", path=f"/chat/conversations/{conversation_id}", method="DELETE", request=request)
-
+    return await forward(
+        service="chat",
+        path=f"/chat/conversations/{conversation_id}",
+        method="DELETE",
+        request=request,
+    )
 
 
 # Feedback Routes

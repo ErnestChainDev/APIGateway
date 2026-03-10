@@ -1,9 +1,11 @@
+from typing import Literal, Optional
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
 
 
 # Authentication Schemas
 MAX_BCRYPT_BYTES = 72
+
 
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -81,7 +83,6 @@ class ProfileUpsertIn(BaseModel):
         default="",
         description="Comma-separated skills/keywords, e.g. 'python, sql, ui/ux'",
     )
-
     notes: str = Field(default="")
 
 
@@ -124,30 +125,49 @@ class CourseOut(CourseIn):
 
 
 # Quiz Schemas
+QuizCategory = Literal["bscs", "bsit", "bsis", "btvted"]
+QuestionType = Literal["mcq", "fill_blank_choice", "drag_drop"]
+AttemptStatus = Literal["in_progress", "completed", "cancelled"]
+AnswerState = Literal["answered", "missed", "unanswered"]
+
+
 class QuestionCreateIn(BaseModel):
-    category: str = Field(default="general")
+    category: QuizCategory
     text: str
+    question_type: QuestionType = "mcq"
+    points: int = Field(default=1, ge=1)
+    time_limit_seconds: int = Field(default=40, ge=5, le=300)
+    image_url: Optional[str] = None
+    blank_placeholder: Optional[str] = None
 
 
 class OptionCreateIn(BaseModel):
     text: str
     is_correct: bool = False
+    display_order: int = 0
 
 
 class QuestionOut(BaseModel):
     id: int
     category: str
     text: str
+    question_type: QuestionType
+    points: int
+    time_limit_seconds: int
+    image_url: Optional[str] = None
+    blank_placeholder: Optional[str] = None
 
 
 class OptionOut(BaseModel):
     id: int
     question_id: int
     text: str
+    display_order: int
 
 
 class AttemptStartOut(BaseModel):
     attempt_id: int
+    status: AttemptStatus
 
 
 class SubmitAnswerIn(BaseModel):
@@ -155,12 +175,25 @@ class SubmitAnswerIn(BaseModel):
     selected_option_id: int
 
 
+class DragDropMappingIn(BaseModel):
+    item_key: str
+    target_key: str
+
+
+class SaveAnswerIn(BaseModel):
+    question_id: int
+    answer_state: AnswerState = "answered"
+    selected_option_id: Optional[int] = None
+    mappings: list[DragDropMappingIn] = Field(default_factory=list)
+
+
 class SubmitQuizIn(BaseModel):
-    answers: list[SubmitAnswerIn]
+    answers: list[SaveAnswerIn]
 
 
 class SubmitQuizOut(BaseModel):
     attempt_id: int
+    status: AttemptStatus
     score: int
     total: int
     recommendation: dict
