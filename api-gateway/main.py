@@ -20,7 +20,7 @@ from .schemas import (
 
 load_dotenv()
 
-app = FastAPI(title="API Gateway", version="1.0.0")
+app = FastAPI(title="API Gateway", version="1.2.0")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api-gateway")
