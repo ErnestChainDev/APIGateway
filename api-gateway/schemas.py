@@ -76,8 +76,8 @@ class ProfileUpsertIn(BaseModel):
     career_goals: str = Field(default="", description="Career goal text, e.g. 'software developer, data analyst'")
     preferred_program: str = Field(
         default="",
-        description="Optional target program: ComSci/IT/IS/BTVTED",
-        pattern=r"^(|ComSci|IT|IS|BTVTED)$",
+        description="Optional target program: BSCS/BSIT/BSIS/BTVTED",
+        pattern=r"^(|BSCS|BSIT|BSIS|BTVTED)$",
     )
     skills: str = Field(
         default="",
