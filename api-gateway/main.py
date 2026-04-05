@@ -562,14 +562,13 @@ async def quiz_submit_attempt(attempt_id: int, payload: SubmitQuizIn, request: R
 
 
 # AI Routes
-@app.get("/ai/recommendations/{user_id}", tags=["AI Recommendations"])
-async def get_ai_recommendation(user_id: int, request: Request):
+@app.get("/ai/recommendations", tags=["AI Recommendations"])
+async def get_ai_recommendation(request: Request):
     return await forward(
         service="ai",
-        path=f"/ai/recommendations/{user_id}",
+        path="/ai/recommendations",
         method="GET",
         request=request,
-        timeout=60.0,
     )
 
 @app.post("/ai/recommend", operation_id="ai_recommend", tags=["AI Recommendations"])
