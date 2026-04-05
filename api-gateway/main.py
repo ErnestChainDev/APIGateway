@@ -558,12 +558,20 @@ async def quiz_submit_attempt(attempt_id: int, payload: SubmitQuizIn, request: R
         path=f"/quiz/attempts/{attempt_id}/submit",
         method="POST",
         request=request,
-        json_body=payload.model_dump(),
-        timeout=60.0,
     )
 
 
 # AI Routes
+@app.get("/ai/recommendations/{user_id}", tags=["AI Recommendations"])
+async def get_ai_recommendation(user_id: int, request: Request):
+    return await forward(
+        service="ai",
+        path=f"/ai/recommendations/{user_id}",
+        method="GET",
+        request=request,
+        timeout=60.0,
+    )
+
 @app.post("/ai/recommend", operation_id="ai_recommend", tags=["AI Recommendations"])
 async def ai_recommend(payload: RecommendIn, request: Request):
     return await forward(
