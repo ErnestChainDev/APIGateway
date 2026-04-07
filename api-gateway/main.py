@@ -558,6 +558,7 @@ async def quiz_submit_attempt(attempt_id: int, payload: SubmitQuizIn, request: R
         path=f"/quiz/attempts/{attempt_id}/submit",
         method="POST",
         request=request,
+        json_body=payload.model_dump(),
     )
 
 
